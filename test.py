@@ -10,7 +10,7 @@ bus = 0
 device = 0
 
 spi.open(bus,device)
-spi.max_speed_hz = 1e6
+spi.max_speed_hz = 1*1000*1000
 spi.mode = 2
 spi.bits_per_word = 8
 spi.lsbfirst=False
