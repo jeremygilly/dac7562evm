@@ -15,11 +15,6 @@ spi.mode = 2
 spi.bits_per_word = 8
 spi.lsbfirst=False
 
-inputVoltage = 5000
-inputVoltage = float(inputVoltage)
-noBits = 12
-initialIgnore = '{0:02b}'.format(0)
-
 t = 1
 
 # Power up DAC-A and DAC-B
