@@ -37,6 +37,8 @@ sleep(t)
 spi.xfer2([0x30, 0x0, 0x3])
 sleep(t)
 
+# Write to DAC-A input register and update all DACs
+# 00010111 01100110 01100000
 spi.xfer2([0x17, 0x66, 0x60])
 
 spi.close()
