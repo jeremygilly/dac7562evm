@@ -28,7 +28,7 @@ spi.xfer2([0x20, 0x00, 0x3])
 sleep(t)
 
 # Disable internal reference and reset DACs to gain = 1
-# 00100110 00000000 00000000
+# 00111000 00000000 00000000
 spi.xfer2([0x38, 0x0, 0x0])
 sleep(t)
 
