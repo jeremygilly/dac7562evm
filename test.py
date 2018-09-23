@@ -32,8 +32,9 @@ sleep(t)
 spi.xfer2([0x38, 0x0, 0x0])
 sleep(t)
 
-# Tell that the /LDAC is low
-spi.xfer2([0x30, 0x0, 0x4])
+# LDAC pin inactive for DAC-B and DAC-A
+# 00110000 00000000 00000011
+spi.xfer2([0x30, 0x0, 0x3])
 sleep(t)
 
 spi.xfer2([0x17, 0x66, 0x60])
