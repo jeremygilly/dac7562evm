@@ -169,7 +169,7 @@ def main(argv):
         print("On pulse:", on*1000, "ms")
         while True:
           pulsedOutput(DAC, output, inputmV, 2, on, off)
-    else
+    else:
         if (1.0000/frequency < on):
             sys.exit("On pulse longer than frequency")
         else
