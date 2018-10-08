@@ -119,31 +119,70 @@ def setup():
     msg = convertToThreeBytes(LDAC)
     spi.xfer2(msg)
 
-def main():
-    setup()
-    # Set output voltage and update, max pulse is 9 kHz
-    # time = 0 => wavelength = 111.11 us
-    pulse_rate = 10 # Hz
-    pause_time = 1./(pulse_rate)-0.0001111     
-
-    while True:
-      try:
-        output, expectedOutput = operation('a', 200, 5000, 2)
+def constantOutput(DAC, outputmV, inputmV, command):
+    try:
+        output, expectedOutput = operation(DAC, outputmV, inputmV, 2)
         msg = convertToThreeBytes(output)
         spi.xfer2(msg)
-	on = 20.000/1000.000
-        time.sleep(on)
-        output, expectedOutput = operation('a', 0, 5000, 2)
-        msg = convertToThreeBytes(output)
-        spi.xfer2(msg)
-        time.sleep(1-on)
-      except (KeyboardInterrupt, SystemExit):
-        output, expectedOutput = operation('a', 0, 5000, 2)
+    except (KeyboardInterrupt, SystemExit):
+        output, expectedOutput = operation(DAC, 0, inputmV, 2)
         msg = convertToThreeBytes(output)
         spi.xfer2(msg)
         spi.close()
-        sys.exit("System stopped. Returned to 0 V")
+        sys.exit("Constant output error - system stopped. Returned to 0 V")
+
+def pulsedOutput(DAC, outputmV, inputmV, command, on, off):
+    try:
+        output, expectedOutput = operation(DAC, outputmV, inputmV, command)
+        msg = convertToThreeBytes(output)
+        spi.xfer2(msg)
+        time.sleep(on)
+        output, expectedOutput = operation(DAC, 0, inputmV, command)
+        msg = convertToThreeBytes(output)
+        spi.xfer2(msg)
+        time.sleep(off)
+    except (KeyboardInterrupt, SystemExit):
+        output, expectedOutput = operation(DAC, 0, inputmV, command)
+        msg = convertToThreeBytes(output)
+        spi.xfer2(msg)
+        spi.close()
+        sys.exit("Pulsing system stopped. Returned to 0 V")
+
+def main(argv):
+    setup()
+    inputmV = 5000
+    output = float(sys.argv[1])
+    frequency = float(sys.argv[2])
+    on = float(sys.argv[3])/1000.0000
+    
+    if frequency == 0:
+        constantOutput('a', output, inputmV, 2)
+        print("Output:", output, "mV")
+        print("Frequency: ", frequency, "Hz")
+        print("On pulse:", on*1000, "ms")
+    elif on == 0:
+        on = 1./(frequency*2)-0.0001111
+        off = on
+        print("Output:", output, "mV")
+        print("Frequency: ", frequency, "Hz")
+        print("On pulse:", on*1000, "ms")
+        while True:
+          pulsedOutput('a', output, inputmV, 2, on, off)
+    else
+        if (1.0000/frequency < on):
+            sys.exit("On pulse longer than frequency")
+        else
+            on = on/1000.0000
+        # Set output voltage and update, max pulse is 9 kHz
+        # time = 0 => wavelength = 111.11 us
+        on = on - 0.0001111
+        off = 1 - on
+        print("Output:", output, "mV")
+        print("Frequency: ", frequency, "Hz")
+        print("On pulse:", on*1000, "ms")   
+        while True:
+          pulsedOutput('a', 200, 5000, 2, on, off)
         
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])
 
