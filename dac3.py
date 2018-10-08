@@ -151,12 +151,13 @@ def pulsedOutput(DAC, outputmV, inputmV, command, on, off):
 def main(argv):
     setup()
     inputmV = 5000
-    output = float(sys.argv[1])
-    frequency = float(sys.argv[2])
-    on = float(sys.argv[3])/1000.0000
+    DAC = sys.argv[1]
+    output = float(sys.argv[2])
+    frequency = float(sys.argv[3])
+    on = float(sys.argv[4])/1000.0000
     
     if frequency == 0:
-        constantOutput('a', output, inputmV, 2)
+        constantOutput(DAC, output, inputmV, 2)
         print("Output:", output, "mV")
         print("Frequency: ", frequency, "Hz")
         print("On pulse:", on*1000, "ms")
@@ -167,7 +168,7 @@ def main(argv):
         print("Frequency: ", frequency, "Hz")
         print("On pulse:", on*1000, "ms")
         while True:
-          pulsedOutput('a', output, inputmV, 2, on, off)
+          pulsedOutput(DAC, output, inputmV, 2, on, off)
     else
         if (1.0000/frequency < on):
             sys.exit("On pulse longer than frequency")
@@ -181,7 +182,7 @@ def main(argv):
         print("Frequency: ", frequency, "Hz")
         print("On pulse:", on*1000, "ms")   
         while True:
-          pulsedOutput('a', 200, 5000, 2, on, off)
+          pulsedOutput(DAC, output, inputmV, 2, on, off)
         
 if __name__ == '__main__':
     main(sys.argv[1:])
