@@ -172,7 +172,7 @@ def main(argv):
     else:
         if (1.0000/frequency < on):
             sys.exit("On pulse longer than frequency")
-        else
+        else:
             on = on/1000.0000
         # Set output voltage and update, max pulse is 9 kHz
         # time = 0 => wavelength = 111.11 us
