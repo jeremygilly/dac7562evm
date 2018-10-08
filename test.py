@@ -33,7 +33,12 @@ spi.xfer2([0x30, 0x0, 0x3])
 sleep(t)
 
 # Write to DAC-A input register and update all DACs
-# 00010111 01100110 01100000
-spi.xfer2([0x17, 0x66, 0x60])
+# 00010111 10000000 00000000
+a = ((2**8 * 0x66) + 0x60) << 4
 
+##c >> 4 = 2**8 * a + b
+spi.xfer2([23, 11100110, 96])
+a = float(a)
+expected = float(a/4096*5000)
+print("expected [mV]", expected)
 spi.close()
