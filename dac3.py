@@ -1,6 +1,8 @@
 
 # Pulse DAC
 
+# python dac3.py DAC(AorBorBoth) output(mV) frequency(Hz) ontime (ms)
+import numpy as np
 import spidev
 import sys
 import time
@@ -103,14 +105,14 @@ def convertToThreeBytes(input):
     output = [int(input[:8],2), int(input[8:16],2), int(input[16:],2)]
     return output
 
-def setup():
+def setup(internalreference):
     # Power up device
     powerUp = power(2)
     msg = convertToThreeBytes(powerUp)
     spi.xfer2(msg)
 
-    # Disable internal reference
-    reference = other(7) # enable internal reference
+    # Internal reference
+    reference = other(internalreference) # enable (6) or disable (7) internal reference
     msg = convertToThreeBytes(reference)
     spi.xfer2(msg)
 
@@ -149,40 +151,65 @@ def pulsedOutput(DAC, outputmV, inputmV, command, on, off):
         sys.exit("Pulsing system stopped. Returned to 0 V")
 
 def main(argv):
-    setup()
+    internalreference = 7 # 6 = external, 7 = internal
+    setup(internalreference)
     inputmV = 5000
     DAC = sys.argv[1]
     output = float(sys.argv[2])
+    if internalreference == 6:
+            outputDAC = output*2
+    else:
+            outputDAC = output
     frequency = float(sys.argv[3])
     on = float(sys.argv[4])/1000.0000
     
     if frequency == 0:
-        constantOutput(DAC, output, inputmV, 2)
+       # while True:
+        constantOutput(DAC, outputDAC, inputmV, 2)
         print("Output:", output, "mV")
         print("Frequency: ", frequency, "Hz")
         print("On pulse:", on*1000, "ms")
+            #time.sleep(0.0001)
+        
     elif on == 0:
-        on = 1./(frequency*2)-0.0001111
+        on = 1./(frequency*2)
         off = on
+
+    
+        
         print("Output:", output, "mV")
         print("Frequency: ", frequency, "Hz")
         print("On pulse:", on*1000, "ms")
         while True:
-          pulsedOutput(DAC, output, inputmV, 2, on, off)
+          pulsedOutput(DAC, outputDAC, inputmV, 0, on, off)
+          pulsedOutput(DAC, outputDAC, inputmV, 1, on, off)
+
+    elif frequency == -1:
+        steps = 11
+        outputmV = float(output)
+        staircase = np.linspace(0, outputmV, steps, endpoint=True)
+        staircase2 = np.linspace(staircase[len(staircase)-2],staircase[1],steps-2,endpoint=True)
+        staircase = np.append(staircase, staircase2)
+        while True:
+            for i in range(len(staircase)):
+                constantOutput(DAC, staircase[i], inputmV, 2)
+                print("Output:", staircase[i], "mV")
+                time.sleep(0.05)
+          
     else:
         if (1.0000/frequency < on):
             sys.exit("On pulse longer than frequency")
         else:
-            on = on/1000.0000
+            pass
         # Set output voltage and update, max pulse is 9 kHz
         # time = 0 => wavelength = 111.11 us
-        on = on - 0.0001111
+        # on = on - 0.0001111
         off = 1 - on
         print("Output:", output, "mV")
         print("Frequency: ", frequency, "Hz")
         print("On pulse:", on*1000, "ms")   
         while True:
-          pulsedOutput(DAC, output, inputmV, 2, on, off)
+          pulsedOutput(DAC, outputDAC, inputmV, 2, on, off)
         
 if __name__ == '__main__':
     main(sys.argv[1:])
