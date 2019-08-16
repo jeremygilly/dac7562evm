@@ -2,12 +2,24 @@
 # Pulse DAC
 
 # python dac3.py DAC(AorBorBoth) output(mV) frequency(Hz) ontime (ms)
+# Recommended pin out assuming RPi 3 (SPI bus 1, device 0) to DAC7562EVM
+# 5V to J3.3 (AVdd)
+# GND to J3.5
+
+# GND to J1.1
+# Vout to J1.2
+
+# SPI1 MOSI (pin 38) to J2.11 
+# SPI1 MISO (pin 35) to [not required, it sends nothing back]
+# SPI1 SCLK (pin 40) to J2.3
+# SPI1 CE0 (pin 12) to J2.9
+
 import numpy as np
 import spidev
 import sys
 import time
-bus = 0
-device = 0
+bus = 1 # changed to 1 to work alongside ADS1261
+device = 0 
 
 spi = spidev.SpiDev()
 
@@ -156,10 +168,12 @@ def main(argv):
     inputmV = 5000
     DAC = sys.argv[1]
     output = float(sys.argv[2])
+    
     if internalreference == 6:
             outputDAC = output*2
     else:
-            outputDAC = output
+            outputDAC = output*2
+            
     frequency = float(sys.argv[3])
     on = float(sys.argv[4])/1000.0000
     
