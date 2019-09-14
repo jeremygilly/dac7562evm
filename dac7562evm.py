@@ -1,8 +1,6 @@
-
 # Pulse DAC
 
-# python dac3.py DAC(AorBorBoth) output(mV) frequency(Hz) ontime (ms)
-# Recommended pin out assuming RPi 3 (SPI bus 1, device 0) to DAC7562EVM
+# Recommended pin out assuming RPi 3 (SPI bus 2, device 0) to DAC7562EVM
 # 5V to J3.3 (AVdd)
 # GND to J3.5
 
@@ -18,213 +16,214 @@ import numpy as np
 import spidev
 import sys
 import time
-bus = 1 # changed to 1 to work alongside ADS1261
-device = 0 
 
-spi = spidev.SpiDev()
-
-spi.open(bus,device)
-spi.max_speed_hz = 1000000 # 1 MHz                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
-spi.mode = 2
-spi.bits_per_word = 8
-spi.lsbfirst = False
-bits = 12
-
-def operation(DAC, outputmV, inputVoltage, command):
-## Possible Commands:
-##    0 = write to register only
-##    1 = update register only
-##    2 = write to register and update all DACs
-##    3 = write and update nominated register only
-    commands = ['000','001','010','011']
-    addresses = ['000','001','111'] # [DAC-A, DAC-B, both]
-    commandBinary = commands[command]
-
-    if (DAC == 'a'):
-        address = addresses[0]
-    elif (DAC == 'b'):
-        address = addresses[1]
-    elif (DAC == 'both'):
-        address = addresses[2]
-    else:
-        print("DAC not correct, please enter either 'a', 'b', or 'both'")
-        sys.exit()
-
-    outputmV = float(outputmV)
-    inputVoltage = float(inputVoltage)
-    data = int(outputmV/inputVoltage*(2**bits)) # bits to be sent as input data out of 2^12
-    outputmV_bin = '{0:012b}'.format(data)
-
-    output = str('00' + commandBinary + address + outputmV_bin + '0000')
-    trueOutput = float(data)/(2**bits)*inputVoltage
+class DAC7562():
+    address_dict = dict([
+		('a','000'),
+        ('b','001'),
+        ('gain','010'),
+        ('ab','111'),
+	])
     
-    return output, trueOutput
-
-def power(data):
-    #output = powerUp(DAC, data) ## where DAC = 'a' or 'b' or 'both'
-##                                and data is a command from 0 to 11 
-## Possible commands:
-##    0 = Power up DAC-A
-##    1 = Power-up DAC-B
-##    2 = Power-up DAC-A and DAC-B
-##    3 = Power down DAC-A: 1 kOhm to GND
-##    4 = Power down DAC-B: 1 kOhm to GND
-##    5 = Power down DAC-A and DAC-B: 1 kOhm to GND
-##    6 = Power down DAC-A: 100 kOhm to GND
-##    7 = Power down DAC-B: 100 kOhm to GND
-##    8 = Power down DAC-A and DAC-B: 100 kOhm to GND
-##    9 = Power down DAC-A: Open circuit
-##    10 = Power down DAC-B: Open circuit
-##    11 = Power down DAC-A and DAC-B: Open circuit
-    commands = ['001000000000000000000001', 
-                '001000000000000000000010',
-                '001000000000000000000011',
-                '001000000000000000010001',
-                '001000000000000000010010',
-                '001000000000000000010011',
-                '001000000000000000100001',
-                '001000000000000000100010',
-                '001000000000000000100011',
-                '001000000000000000110001',
-                '001000000000000000110010',
-                '001000000000000000110011']
-    output = commands[data]
-    return output
-
-def other(command):
-##    Possible commands:
-##        0 = Reset DAC-A and DAC-B input register and update all DACs
-##        1 = Reset all registers and update all DACs (power on reset update)
-##        2 = /LDAC pin active for DAC-B and DAC-A
-##        3 = /LDAC pin active for DAC-B; inactive for DAC-A
-##        4 = /LDAC pin inactive for DAC-B; active for DAC-A
-##        5 = /LDAC pin inactive for DAC-B and DAC-A
-##        6 = Disable internal reference and reset DACs to gain = 1
-##        7 = Enable internal reference and reset DACs to gain = 2
-    commands = ['001010000000000000000000',
-                '001010000000000000000001',
-                '001100000000000000000000',
-                '001100000000000000000001',
-                '001100000000000000000010',
-                '001100000000000000000011',
-                '001110000000000000000000',
-                '001110000000000000000001']
-    output = commands[command]
-    return output
-
-def convertToThreeBytes(input):
-    # convert to three eight bit integers for spi library
-    output = [int(input[:8],2), int(input[8:16],2), int(input[16:],2)]
-    return output
-
-def setup(internalreference):
-    # Power up device
-    powerUp = power(2)
-    msg = convertToThreeBytes(powerUp)
-    spi.xfer2(msg)
-
-    # Internal reference
-    reference = other(internalreference) # enable (6) or disable (7) internal reference
-    msg = convertToThreeBytes(reference)
-    spi.xfer2(msg)
-
-    # Use internal LDAC pin to have synchronous updates
-    LDAC = other(5)
-    msg = convertToThreeBytes(LDAC)
-    spi.xfer2(msg)
-
-def constantOutput(DAC, outputmV, inputmV, command):
-    try:
-        output, expectedOutput = operation(DAC, outputmV, inputmV, 2)
-        msg = convertToThreeBytes(output)
-        spi.xfer2(msg)
-    except (KeyboardInterrupt, SystemExit):
-        output, expectedOutput = operation(DAC, 0, inputmV, 2)
-        msg = convertToThreeBytes(output)
-        spi.xfer2(msg)
-        spi.close()
-        sys.exit("Constant output error - system stopped. Returned to 0 V")
-
-def pulsedOutput(DAC, outputmV, inputmV, command, on, off):
-    try:
-        output, expectedOutput = operation(DAC, outputmV, inputmV, command)
-        msg = convertToThreeBytes(output)
-        spi.xfer2(msg)
-        time.sleep(on)
-        output, expectedOutput = operation(DAC, 0, inputmV, command)
-        msg = convertToThreeBytes(output)
-        spi.xfer2(msg)
-        time.sleep(off)
-    except (KeyboardInterrupt, SystemExit):
-        output, expectedOutput = operation(DAC, 0, inputmV, command)
-        msg = convertToThreeBytes(output)
-        spi.xfer2(msg)
-        spi.close()
-        sys.exit("Pulsing system stopped. Returned to 0 V")
-
-def main(argv):
-    internalreference = 7 # 6 = external, 7 = internal
-    setup(internalreference)
-    inputmV = 5000
-    DAC = sys.argv[1]
-    output = float(sys.argv[2])
+    command_dict = dict([
+		('write_no_update','000'),
+        ('ldac_update','001'),
+        ('write_update_all','010'),
+        ('write_update','011'),
+        ('power','100'),
+        ('software_reset','101'),
+        ('ldac','110'),
+        ('reference','111'),
+	])
+    gain_dict = dict([
+		('2','0'),
+        ('1','1'),
+	])
+    mode_dict = dict([
+        ('power_up', '00'),
+        ('power_down_1k_gnd', '01'),
+        ('power_down_100k_gnd', '10'),
+        ('power_down_hi-z_gnd', '11'),
+    ])
+    ldac_dict = dict([
+        ('ldac','0'),
+        ('synchronous','1'),
+    ])
+    software_reset_dict = dict([
+        ('reset_dac','0'),
+        ('reset_all','1'),
+    ])
     
-    if internalreference == 6:
-            outputDAC = output*2
-    else:
-            outputDAC = output*2
-            
-    frequency = float(sys.argv[3])
-    on = float(sys.argv[4])/1000.0000
+    inv_address_dict = {v: k for k, v in address_dict.items()}
+    inv_command_dict = {v: k for k, v in command_dict.items()}
+    inv_gain_dict = {v: k for k, v in gain_dict.items()}
+    inv_mode_dict = {v: k for k, v in mode_dict.items()}
+    inv_ldac_dict = {v: k for k, v in ldac_dict.items()}
+    inv_software_reset_dict = {v: k for k, v in software_reset_dict.items()}
     
-    if frequency == 0:
-       # while True:
-        constantOutput(DAC, outputDAC, inputmV, 2)
-        print("Output:", output, "mV")
-        print("Frequency: ", frequency, "Hz")
-        print("On pulse:", on*1000, "ms")
-            #time.sleep(0.0001)
+    def __init__(self, 
+                    bus = 1, # changed to 1 to work alongside ADS1261
+                    device = 0,
+                    max_speed_hz = 1000000,
+                    mode = 2,
+                    bits_per_word = 8,
+                    lsbfirst = False):
+
         
-    elif on == 0:
-        on = 1./(frequency*2)
-        off = on
-
-    
+        self.bus = bus
+        self.device = device
+        self.spi = spidev.SpiDev()
+        self.spi.open(self.bus,self.device)
+        self.spi.max_speed_hz = 1000000 # 1 MHz                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+        self.spi.mode = 2
+        self.spi.bits_per_word = 8
+        self.spi.lsbfirst = False
+        bits = 12
+        # gain = 2 by default when using internal reference (pg 28 DAC7562 datasheet)
         
-        print("Output:", output, "mV")
-        print("Frequency: ", frequency, "Hz")
-        print("On pulse:", on*1000, "ms")
-        while True:
-          pulsedOutput(DAC, outputDAC, inputmV, 0, on, off)
-          pulsedOutput(DAC, outputDAC, inputmV, 1, on, off)
-
-    elif frequency == -1:
-        steps = 11
-        outputmV = float(output)
-        staircase = np.linspace(0, outputmV, steps, endpoint=True)
-        staircase2 = np.linspace(staircase[len(staircase)-2],staircase[1],steps-2,endpoint=True)
-        staircase = np.append(staircase, staircase2)
-        while True:
-            for i in range(len(staircase)):
-                constantOutput(DAC, staircase[i], inputmV, 2)
-                print("Output:", staircase[i], "mV")
-                time.sleep(0.05)
-          
-    else:
-        if (1.0000/frequency < on):
-            sys.exit("On pulse longer than frequency")
+    def help(self):
+        print("DAC:",str(list(self.address_dict.keys())))
+        print("Commands:",str(list(self.command_dict.keys())))
+        print("Gain:", str(list(self.gain_dict.keys())))
+        print("Mode:", str(list(self.mode_dict.keys())))
+        print("Selection:", str(list(self.ldac_dict.keys())))
+        print("Software Reset:", str(list(self.software_reset_dict.keys())))
+        print("Vout: between -300 and 5700 mV (depending on power source).")
+    
+    def Vout_to_bin(self, Vout, Vref = 2.5, gain = 2):
+        # returns the binary that is loaded into the DAC register
+        # takes a Vout [mV] value to be created (between 0 and x), a reference Voltage, and gain
+        #~ bits = 2**n, where n = 12 (pre-loaded as 4096 to speed up calculation)
+        if Vout < 5700 and Vout > -300:
+            data = int(Vout*4096/(Vref*1000*gain))
+            Din = '{0:012b}'.format(data)
         else:
-            pass
-        # Set output voltage and update, max pulse is 9 kHz
-        # time = 0 => wavelength = 111.11 us
-        # on = on - 0.0001111
-        off = 1 - on
-        print("Output:", output, "mV")
-        print("Frequency: ", frequency, "Hz")
-        print("On pulse:", on*1000, "ms")   
-        while True:
-          pulsedOutput(DAC, outputDAC, inputmV, 2, on, off)
+            a = "Vout was beyond the absolute maximum rating for a DAC7562 (Table 7.1 in DAC7562 datasheet).\nIt must be between -300 and 5700 mV and you asked for " + str(Vout) + " mV.\nPlease check your Vout and try again."
+            self.end(a = a)
+        return Din 
         
+    def send(self,message):
+        try:
+            returned = self.spi.xfer2(message)
+            return returned
+        except Exception as e:
+            print ("Message send failure:", message)
+            print(e)
+            self.end()
+    
+    def Vout(self, dac, command, Vout, Vref = 2.5, gain = 2):
+        Din = self.Vout_to_bin(Vout = Vout, Vref = Vref, gain = gain)
+        command = command.lower()
+        dac = dac.lower()
+
+        if dac in self.address_dict:
+            address_bit = self.address_dict[dac]
+        else:
+            a = "DAC address not available.\nYou requested '" + dac + "' but only "+str(list(self.address_dict.keys()))+" are available."
+            self.end(a = a)
+            
+        if command in self.command_dict:
+            command_bit = self.command_dict[command]
+        else:
+            a = "Command not available.\nYou requested '" + command + "' but only " + str(list(self.command_dict.keys())) + " are available."
+            self.end(a = a)
+        
+        message_to_send = str('00' + str(command_bit) + str(address_bit) + str(Din) + '0000')            
+        message_to_send = self.convertToThreeBytes(message_to_send)
+        command_response = self.send(message_to_send)
+        return command_response
+        
+    def gain(self, dac_a = 1, dac_b = 1):
+        dac_a = str(dac_a)
+        dac_b = str(dac_b)
+        if dac_a in self.gain_dict:
+            if dac_b in self.gain_dict:
+                message_to_send = '00' + '000' + self.address_dict['gain'] + '00000000000000' + self.gain_dict[dac_b] + self.gain_dict[dac_a]
+                message_to_send = self.convertToThreeBytes(message_to_send)
+                command_response = self.send(message_to_send)
+            else:
+                a = "dac_b was not available.\nYou requested '" + dac_b + "' but only " + str(list(self.gain_dict.keys())) + " are available."
+                self.end(a = a)
+        else:
+            a = "dac_a was not available.\nYou requested '" + dac_a + "' but only " + str(list(self.gain_dict.keys())) + " are available."
+            self.end(a = a)        
+        return int(dac_a), int(dac_b)
+        
+    def reset(self, software_reset = 'reset_dac'):
+        software_reset = software_reset.lower()
+        if software_reset in self.software_reset_dict:
+            message_to_send = '00' + self.command_dict['software_reset'] + '000' + '000000000000000' + self.software_reset_dict[software_reset]
+            message_to_send = self.convertToThreeBytes(message_to_send)
+            command_response = self.send(message_to_send)
+        else:
+            a = "Reference not available.\nYou requested '" + software_reset + "' but only " + str(list(software_reset_dict.keys())) + " are available."
+            self.end(a = a)
+        return 0
+    
+    def ldac(self, ldac_a = 'synchronous', ldac_b = 'synchronous'):
+        ldac_a = ldac_a.lower()
+        ldac_b = ldac_b.lower()
+        if ldac_a in self.ldac_dict:
+            if ldac_b in self.ldac_dict:
+                message_to_send = '00' + self.command_dict['ldac'] + '000' + '00000000000000' + self.ldac_dict[ldac_b] + self.ldac_dict[ldac_a]
+                message_to_send = self.convertToThreeBytes(message_to_send)
+                command_response = self.send(message_to_send)
+            else:
+                a = "LDAC selection not available.\nYou requested '" + ldac_b + "' but only " + str(list(ldac_dict.keys())) + " are available."
+                self.end(a = a)
+        else:
+            a = "LDAC selection not available.\nYou requested '" + ldac_a + "' but only " + str(list(ldac_dict.keys())) + " are available."
+            self.end(a = a)
+        return 0
+        
+    
+    def convertToThreeBytes(self, m):
+        # convert to three eight bit integers for spi library
+        if len(m) != 24 or type(m) != str: print("Error! 24 bits not sent to ADC")
+        output = [int(m[:8],2), int(m[8:16],2), int(m[16:],2)]
+        return output
+
+    def power(self, mode = 'power_up', dac = 'ab'):
+        dac = dac.lower()
+        dac_dict = {'a':'01', 'b':'10', 'ab':'11'}
+        if mode in self.mode_bit:
+            if dac in dac_dict:
+                message_to_send = '00' + self.command_dict['power'] + '000' + '000000000' + self.mode_bit[mode] + '00' + dac_dict[dac]
+                message_to_send = self.convertToThreeBytes(message_to_send)
+                command_response = self.send(message_to_send)
+            else:
+                a = "DAC not available.\nYou requested '" + dac + "' but only " + str(list(dac_dict.keys())) + " are available."
+                self.end(a = a)
+        else:
+            a = "Mode not available.\nYou requested '" + mode + "' but only " + str(list(mode_dict.keys())) + " are available."
+            self.end(a = a)
+        return 0
+        
+    def reference(self, reference = 'internal'):
+        reference = reference.lower()
+        reference_dict = {'external': '0', 'internal':'1'}
+        if reference in reference_dict:
+            message_to_send = '00' + self.command_dict['reference'] + '000' + '000000000000000' + reference_dict[reference]
+            message_to_send = self.convertToThreeBytes(message_to_send)
+            command_response = self.send(message_to_send)
+        else:
+            a = "Reference not available.\nYou requested '" + reference + "' but only " + str(list(reference_dict.keys())) + " are available."
+            self.end(a = a)
+        return 0
+                
+    def end(self, a = ''):
+        self.spi.close()
+        print("\nSPI closed. System exited.\n")
+        sys.exit(a)
+
+# operations below this line will not be used when imported as a module
+def main():
+    dac = DAC7562()
+    dac.reference(reference = 'internal')
+    dac_a, dac_b = dac.gain(dac_a = 1, dac_b = 1)
+    dac.Vout(dac = 'a', command = 'write_update', Vout = 1500, Vref = 2.5, gain = dac_a)
+    dac.end(a = 'Main program closed.')
+            
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main()
 
