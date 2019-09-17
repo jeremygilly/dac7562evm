@@ -90,12 +90,18 @@ class DAC7562():
         print("Software Reset:", str(list(self.software_reset_dict.keys())))
         print("Vout: between -300 and 5700 mV (depending on power source).")
     
-    def Vout_to_bin(self, Vout, Vref = 2.5, gain = 2):
+    def convertToThreeBytes(self, m):
+        # convert to three eight bit integers for spi library
+        if len(m) != 24 or type(m) != str: self.end(a = "Error! 24 bits not sent to DAC\nMessage sent: " + m + "\nLength: "+ str(len(m)))
+        output = [int(m[:8],2), int(m[8:16],2), int(m[16:],2)]
+        return output
+        
+    def Vout_to_bin(self, Vout, Vref = 2500, gain = 2):
         # returns the binary that is loaded into the DAC register
         # takes a Vout [mV] value to be created (between 0 and x), a reference Voltage, and gain
         #~ bits = 2**n, where n = 12 (pre-loaded as 4096 to speed up calculation)
         if Vout < 5700 and Vout > -300:
-            data = int(Vout*4096/(Vref*1000*gain))
+            data = int(Vout*4096/(Vref*gain))
             Din = '{0:012b}'.format(data)
         else:
             a = "Vout was beyond the absolute maximum rating for a DAC7562 (Table 7.1 in DAC7562 datasheet).\nIt must be between -300 and 5700 mV and you asked for " + str(Vout) + " mV.\nPlease check your Vout and try again."
@@ -111,7 +117,7 @@ class DAC7562():
             print(e)
             self.end()
     
-    def Vout(self, dac, command, Vout, Vref = 2.5, gain = 2):
+    def Vout(self, dac, command, Vout, Vref = 2500, gain = 2):
         Din = self.Vout_to_bin(Vout = Vout, Vref = Vref, gain = gain)
         command = command.lower()
         dac = dac.lower()
@@ -131,7 +137,7 @@ class DAC7562():
         message_to_send = str('00' + str(command_bit) + str(address_bit) + str(Din) + '0000')            
         message_to_send = self.convertToThreeBytes(message_to_send)
         command_response = self.send(message_to_send)
-        return command_response
+        return Vout
         
     def gain(self, dac_a = 1, dac_b = 1):
         dac_a = str(dac_a)
@@ -175,20 +181,13 @@ class DAC7562():
             a = "LDAC selection not available.\nYou requested '" + ldac_a + "' but only " + str(list(ldac_dict.keys())) + " are available."
             self.end(a = a)
         return 0
-        
-    
-    def convertToThreeBytes(self, m):
-        # convert to three eight bit integers for spi library
-        if len(m) != 24 or type(m) != str: print("Error! 24 bits not sent to ADC")
-        output = [int(m[:8],2), int(m[8:16],2), int(m[16:],2)]
-        return output
 
     def power(self, mode = 'power_up', dac = 'ab'):
         dac = dac.lower()
         dac_dict = {'a':'01', 'b':'10', 'ab':'11'}
-        if mode in self.mode_bit:
+        if mode in self.mode_dict:
             if dac in dac_dict:
-                message_to_send = '00' + self.command_dict['power'] + '000' + '000000000' + self.mode_bit[mode] + '00' + dac_dict[dac]
+                message_to_send = '00' + self.command_dict['power'] + '000' + '0000000000' + self.mode_dict[mode] + '00' + dac_dict[dac]
                 message_to_send = self.convertToThreeBytes(message_to_send)
                 command_response = self.send(message_to_send)
             else:
@@ -206,6 +205,9 @@ class DAC7562():
             message_to_send = '00' + self.command_dict['reference'] + '000' + '000000000000000' + reference_dict[reference]
             message_to_send = self.convertToThreeBytes(message_to_send)
             command_response = self.send(message_to_send)
+            if reference == 'internal': Vref = 2500
+            else: Vref = 5000
+            return Vref
         else:
             a = "Reference not available.\nYou requested '" + reference + "' but only " + str(list(reference_dict.keys())) + " are available."
             self.end(a = a)
@@ -219,9 +221,12 @@ class DAC7562():
 # operations below this line will not be used when imported as a module
 def main():
     dac = DAC7562()
-    dac.reference(reference = 'internal')
+    dac.power(mode = 'power_up', dac = 'ab')
+    dac.ldac(ldac_a = 'synchronous', ldac_b = 'synchronous')
+    Vref = dac.reference(reference = 'internal')
     dac_a, dac_b = dac.gain(dac_a = 1, dac_b = 1)
-    dac.Vout(dac = 'a', command = 'write_update', Vout = 1500, Vref = 2.5, gain = dac_a)
+    Vout = dac.Vout(dac = 'a', command = 'write_update', Vout = 1500, Vref = Vref, gain = dac_a)
+    print(Vout, "mV output set.")
     dac.end(a = 'Main program closed.')
             
 if __name__ == '__main__':
