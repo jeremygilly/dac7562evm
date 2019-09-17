@@ -212,6 +212,19 @@ class DAC7562():
             a = "Reference not available.\nYou requested '" + reference + "' but only " + str(list(reference_dict.keys())) + " are available."
             self.end(a = a)
         return 0
+    
+    def check_actual_sample_oscillation_rate(self, duration = 5, Vout = 1500, Vref = 2500, gain = 1):
+        i = 0
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            Vout = self.Vout(dac = 'a', command = 'write_update', Vout = Vout, Vref = Vref, gain = gain)
+            i += 1
+            Vout = self.Vout(dac = 'a', command = 'write_update', Vout = 0, Vref = Vref, gain = gain)
+            i += 1
+        print("Number of iterations:", i)
+        print("Duration (sec):", duration)
+        print("Iterations per second:", i/duration)
+        return 0
                 
     def end(self, a = ''):
         self.spi.close()
@@ -225,8 +238,9 @@ def main():
     dac.ldac(ldac_a = 'synchronous', ldac_b = 'synchronous')
     Vref = dac.reference(reference = 'internal')
     dac_a, dac_b = dac.gain(dac_a = 1, dac_b = 1)
-    Vout = dac.Vout(dac = 'a', command = 'write_update', Vout = 1500, Vref = Vref, gain = dac_a)
-    print(Vout, "mV output set.")
+    #~ Vout = dac.Vout(dac = 'a', command = 'write_update', Vout = 1500, Vref = Vref, gain = dac_a)
+    dac.check_actual_sample_oscillation_rate(duration = 5, Vout = 1500, Vref = Vref, gain = dac_a)
+    #~ print(Vout, "mV output set.")
     dac.end(a = 'Main program closed.')
             
 if __name__ == '__main__':
