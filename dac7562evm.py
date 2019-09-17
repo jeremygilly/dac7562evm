@@ -103,14 +103,17 @@ class DAC7562():
         if Vout < 5700 and Vout > -300:
             data = int(Vout*4096/(Vref*gain))
             Din = '{0:012b}'.format(data)
+            #~ print(data, Din)
         else:
             a = "Vout was beyond the absolute maximum rating for a DAC7562 (Table 7.1 in DAC7562 datasheet).\nIt must be between -300 and 5700 mV and you asked for " + str(Vout) + " mV.\nPlease check your Vout and try again."
             self.end(a = a)
         return Din 
         
-    def send(self,message):
+    def send(self, message):
+        #~ print(message)
         try:
             returned = self.spi.xfer2(message)
+            #~ print(message, returned) # prints [0,0,0] [0,0,0] - why??
             return returned
         except Exception as e:
             print ("Message send failure:", message)
@@ -134,9 +137,14 @@ class DAC7562():
             a = "Command not available.\nYou requested '" + command + "' but only " + str(list(self.command_dict.keys())) + " are available."
             self.end(a = a)
         
-        message_to_send = str('00' + str(command_bit) + str(address_bit) + str(Din) + '0000')            
+        message_to_send = str('00' + str(command_bit) + str(address_bit) + str(Din) + '0000')   
+        #~ message_to_send = str('00' + str(command_bit) + str(address_bit) + '111111111111' + '0000')   
+               
+        #~ print("Message to send:", message_to_send, len(message_to_send), int(message_to_send[8:20],2)/4096*5000)         
         message_to_send = self.convertToThreeBytes(message_to_send)
-        command_response = self.send(message_to_send)
+        #~ print("Message to send after conversion to 3 bytes:", message_to_send, len(message_to_send))  
+        command_response = self.send(message = message_to_send)
+        #~ print(command_response, int(Din,2)/4096*5000)
         return Vout
         
     def gain(self, dac_a = 1, dac_b = 1):
@@ -237,9 +245,13 @@ def main():
     dac.power(mode = 'power_up', dac = 'ab')
     dac.ldac(ldac_a = 'synchronous', ldac_b = 'synchronous')
     Vref = dac.reference(reference = 'internal')
-    dac_a, dac_b = dac.gain(dac_a = 1, dac_b = 1)
-    #~ Vout = dac.Vout(dac = 'a', command = 'write_update', Vout = 1500, Vref = Vref, gain = dac_a)
-    dac.check_actual_sample_oscillation_rate(duration = 5, Vout = 1500, Vref = Vref, gain = dac_a)
+    dac_a, dac_b = dac.gain(dac_a = 2, dac_b = 2) # does this do anything?
+    #~ print(Vref, dac_a)
+    Vout = dac.Vout(dac = 'a', command = 'write_update', Vout = 5000, Vref = Vref, gain = dac_a)
+    #~ Vout = dac.Vout(dac = 'b', command = 'write_update', Vout = 5000, Vref = 2500, gain = dac_b)
+    print(Vout)
+    #~ Vout = dac.Vout(dac = 'a', command = 'write_update', Vout = 3000, Vref = Vref, gain = da)
+    #~ dac.check_actual_sample_oscillation_rate(duration = 5, Vout = 1500, Vref = Vref, gain = dac_a)
     #~ print(Vout, "mV output set.")
     dac.end(a = 'Main program closed.')
             
